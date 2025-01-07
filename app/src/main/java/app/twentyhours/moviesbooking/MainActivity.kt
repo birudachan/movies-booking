@@ -6,6 +6,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -33,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.tooling.preview.Preview
@@ -162,7 +166,42 @@ fun MainContent(modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.height(100.dp))
         SeatsLayout(layout2, true)
     }
+}
 
+@Composable
+fun TransformableRowWithTappableBoxes() {
+    var scale by remember { mutableStateOf(1f) }
+    val state = rememberTransformableState { zoomChange, _, _ ->
+        scale *= zoomChange // Handle pinch-to-zoom
+    }
+
+    // Modifier for the parent Row
+    val parentModifier = Modifier
+        .fillMaxWidth()
+        .height(300.dp)
+        .background(Color.LightGray)
+        .transformable(state)
+
+    Row(
+        modifier = parentModifier
+    ) {
+        repeat(3) {
+            var color by remember { mutableStateOf(Color.Gray) }
+
+            // Modifier for individual boxes
+            val boxModifier = Modifier
+                .size(100.dp * scale) // Scale with the parent
+                .background(color)
+                .pointerInput(Unit) {
+                    detectTapGestures {
+                        // Handle tap events for each box
+                        color = if (color == Color.Gray) Color.Green else Color.Gray
+                    }
+                }
+
+            Box(modifier = boxModifier)
+        }
+    }
 }
 
 @Composable
@@ -173,7 +212,7 @@ fun SeatsLayout(seats: List<SeatsRowData>, isReverse: Boolean = false) {
     BoxWithConstraints {
         val state = rememberTransformableState { zoomChange, offsetChange, _ ->
             scale = (scale * zoomChange).coerceIn(1f, 3f)
-            
+
             val extraWidth = (scale - 1) * constraints.maxWidth
             val extraHeight = (scale - 1) * 200
 
@@ -236,22 +275,31 @@ fun SeatItem(
     number: Int,
     seatType: SeatType = SeatType.NORM
 ) {
-    val background = when (seatType) {
-        SeatType.NORM -> Color.Gray
+    var isSelected by remember { mutableStateOf(false) }
+    var background by remember { mutableStateOf(Color.Green) }
+    background = when (seatType) {
+        SeatType.NORM -> Color.Green
         SeatType.VIP -> Color.Red
         SeatType.COUPLE -> Color.Cyan
+    }
+    if (isSelected) {
+        background = Color.Gray
     }
     Box(
         modifier = Modifier
             .padding(1.dp)
             .size(width = 12.dp, height = 12.dp)
-            .background(background),
+            .background(background)
+            .pointerInput(Unit) {
+                detectTapGestures {
+                    isSelected = !isSelected
+                }
+            },
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = "$rowName$number", style = TextStyle(
-                fontSize = 6.sp
-            )
+            text = "$rowName$number",
+            style = TextStyle(fontSize = 6.sp)
         )
     }
 }
