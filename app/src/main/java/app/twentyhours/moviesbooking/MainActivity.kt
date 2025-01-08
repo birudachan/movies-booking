@@ -1,24 +1,25 @@
 package app.twentyhours.moviesbooking
 
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculateCentroidSize
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateRotation
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -36,7 +37,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.tooling.preview.Preview
@@ -44,6 +49,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.twentyhours.moviesbooking.ui.theme.MoviesBookingTheme
+import kotlin.math.abs
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,9 +58,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             MoviesBookingTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    MainContent(
-                        modifier = Modifier.padding(innerPadding)
-                    )
+                    Column(modifier = Modifier.padding(innerPadding)) {
+                        MainContent()
+                    }
                 }
             }
         }
@@ -63,48 +69,6 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainContent(modifier: Modifier = Modifier) {
-    val layout1: List<SeatsRowData> = listOf(
-        SeatsRowData(rowName = "A", numberSeats = 13, voidSeats = setOf(1)),
-        SeatsRowData(rowName = "B", numberSeats = 14, voidSeats = setOf(1)),
-        SeatsRowData(rowName = "C", numberSeats = 14, voidSeats = setOf(1)),
-        SeatsRowData(
-            rowName = "D",
-            numberSeats = 14,
-            voidSeats = setOf(1),
-            seatType = SeatType.VIP
-        ),
-        SeatsRowData(
-            rowName = "E",
-            numberSeats = 14,
-            voidSeats = setOf(1),
-            seatType = SeatType.VIP
-        ),
-        SeatsRowData(
-            rowName = "F",
-            numberSeats = 14,
-            voidSeats = setOf(1),
-            seatType = SeatType.VIP
-        ),
-        SeatsRowData(
-            rowName = "F",
-            numberSeats = 14,
-            voidSeats = setOf(1),
-            seatType = SeatType.VIP
-        ),
-        SeatsRowData(
-            rowName = "G",
-            numberSeats = 14,
-            voidSeats = setOf(1),
-            seatType = SeatType.VIP
-        ),
-        SeatsRowData(
-            rowName = "H",
-            numberSeats = 14,
-            voidSeats = setOf(1),
-            seatType = SeatType.VIP
-        ),
-        SeatsRowData(rowName = "D", numberSeats = 18, seatType = SeatType.COUPLE),
-    )
     val layout2: List<SeatsRowData> = listOf(
         SeatsRowData(rowName = "A", numberSeats = 22, voidSeats = setOf(5, 20)),
         SeatsRowData(rowName = "B", numberSeats = 22, voidSeats = setOf(5, 20)),
@@ -169,48 +133,13 @@ fun MainContent(modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun TransformableRowWithTappableBoxes() {
-    var scale by remember { mutableStateOf(1f) }
-    val state = rememberTransformableState { zoomChange, _, _ ->
-        scale *= zoomChange // Handle pinch-to-zoom
-    }
-
-    // Modifier for the parent Row
-    val parentModifier = Modifier
-        .fillMaxWidth()
-        .height(300.dp)
-        .background(Color.LightGray)
-        .transformable(state)
-
-    Row(
-        modifier = parentModifier
-    ) {
-        repeat(3) {
-            var color by remember { mutableStateOf(Color.Gray) }
-
-            // Modifier for individual boxes
-            val boxModifier = Modifier
-                .size(100.dp * scale) // Scale with the parent
-                .background(color)
-                .pointerInput(Unit) {
-                    detectTapGestures {
-                        // Handle tap events for each box
-                        color = if (color == Color.Gray) Color.Green else Color.Gray
-                    }
-                }
-
-            Box(modifier = boxModifier)
-        }
-    }
-}
-
-@Composable
 fun SeatsLayout(seats: List<SeatsRowData>, isReverse: Boolean = false) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
 
     BoxWithConstraints {
-        val state = rememberTransformableState { zoomChange, offsetChange, _ ->
+        val onGesture = { _: Offset, offsetChange: Offset, zoomChange: Float, _: Float,
+                          _: PointerInputChange, changes: List<PointerInputChange> ->
             scale = (scale * zoomChange).coerceIn(1f, 3f)
 
             val extraWidth = (scale - 1) * constraints.maxWidth
@@ -223,6 +152,10 @@ fun SeatsLayout(seats: List<SeatsRowData>, isReverse: Boolean = false) {
                 x = (offset.x + scale * offsetChange.x).coerceIn(-maxX, maxX),
                 y = (offset.y + scale * offsetChange.y).coerceIn(-maxY, maxY)
             )
+
+            if (changes.size > 1) {
+                changes.forEach { it.consume() }
+            }
         }
 
         Row(modifier = Modifier
@@ -232,7 +165,12 @@ fun SeatsLayout(seats: List<SeatsRowData>, isReverse: Boolean = false) {
                 translationX = offset.x
                 translationY = offset.y
             }
-            .transformable(state)) {
+            .pointerInput(Unit) {
+                detectTransformGestures(
+                    pass = PointerEventPass.Initial,
+                    onGesture = onGesture
+                )
+            }) {
             val direction = if (isReverse) LayoutDirection.Rtl else LayoutDirection.Ltr
 
             CompositionLocalProvider(LocalLayoutDirection provides direction) {
@@ -244,7 +182,6 @@ fun SeatsLayout(seats: List<SeatsRowData>, isReverse: Boolean = false) {
             }
         }
     }
-
 }
 
 @Composable
@@ -290,11 +227,7 @@ fun SeatItem(
             .padding(1.dp)
             .size(width = 12.dp, height = 12.dp)
             .background(background)
-            .pointerInput(Unit) {
-                detectTapGestures {
-                    isSelected = !isSelected
-                }
-            },
+            .clickable { isSelected = !isSelected },
         contentAlignment = Alignment.Center
     ) {
         Text(
@@ -318,5 +251,118 @@ fun VoidSeatItem() {
 fun GreetingPreview() {
     MoviesBookingTheme {
         MainContent()
+    }
+}
+
+/**
+ * Source: https://stackoverflow.com/a/76021552/23770482
+ */
+suspend fun PointerInputScope.detectTransformGestures(
+    panZoomLock: Boolean = false,
+    consume: Boolean = true,
+    pass: PointerEventPass = PointerEventPass.Main,
+    onGestureStart: (PointerInputChange) -> Unit = {},
+    onGesture: (
+        centroid: Offset,
+        pan: Offset,
+        zoom: Float,
+        rotation: Float,
+        mainPointer: PointerInputChange,
+        changes: List<PointerInputChange>
+    ) -> Unit,
+    onGestureEnd: (PointerInputChange) -> Unit = {}
+) {
+    awaitEachGesture {
+        var rotation = 0f
+        var zoom = 1f
+        var pan = Offset.Zero
+        var pastTouchSlop = false
+        val touchSlop = viewConfiguration.touchSlop
+        var lockedToPanZoom = false
+
+        // Wait for at least one pointer to press down, and set first contact position
+        val down: PointerInputChange = awaitFirstDown(
+            requireUnconsumed = false,
+            pass = pass
+        )
+        onGestureStart(down)
+
+        var pointer = down
+        // Main pointer is the one that is down initially
+        var pointerId = down.id
+
+        do {
+            val event = awaitPointerEvent(pass = pass)
+
+            // If any position change is consumed from another PointerInputChange
+            // or pointer count requirement is not fulfilled
+            val canceled =
+                event.changes.any { it.isConsumed }
+
+            if (!canceled) {
+
+                // Get pointer that is down, if first pointer is up
+                // get another and use it if other pointers are also down
+                // event.changes.first() doesn't return same order
+                val pointerInputChange =
+                    event.changes.firstOrNull { it.id == pointerId }
+                        ?: event.changes.first()
+
+                // Next time will check same pointer with this id
+                pointerId = pointerInputChange.id
+                pointer = pointerInputChange
+
+                val zoomChange = event.calculateZoom()
+                val rotationChange = event.calculateRotation()
+                val panChange = event.calculatePan()
+
+                if (!pastTouchSlop) {
+                    zoom *= zoomChange
+                    rotation += rotationChange
+                    pan += panChange
+
+                    val centroidSize = event.calculateCentroidSize(useCurrent = false)
+                    val zoomMotion = abs(1 - zoom) * centroidSize
+                    val rotationMotion =
+                        abs(rotation * kotlin.math.PI.toFloat() * centroidSize / 180f)
+                    val panMotion = pan.getDistance()
+
+                    if (zoomMotion > touchSlop ||
+                        rotationMotion > touchSlop ||
+                        panMotion > touchSlop
+                    ) {
+                        pastTouchSlop = true
+                        lockedToPanZoom = panZoomLock && rotationMotion < touchSlop
+                    }
+                }
+
+                if (pastTouchSlop) {
+                    val centroid = event.calculateCentroid(useCurrent = false)
+                    val effectiveRotation = if (lockedToPanZoom) 0f else rotationChange
+                    if (effectiveRotation != 0f ||
+                        zoomChange != 1f ||
+                        panChange != Offset.Zero
+                    ) {
+                        onGesture(
+                            centroid,
+                            panChange,
+                            zoomChange,
+                            effectiveRotation,
+                            pointer,
+                            event.changes
+                        )
+                    }
+
+                    if (consume) {
+                        event.changes.forEach {
+                            if (it.positionChanged()) {
+                                it.consume()
+                            }
+                        }
+                    }
+                }
+            }
+        } while (!canceled && event.changes.any { it.pressed })
+        onGestureEnd(pointer)
     }
 }
